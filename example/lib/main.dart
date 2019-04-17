@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:contacts_service/contacts_service.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 void main() => runApp(ContactsExampleApp());
 
@@ -34,38 +33,14 @@ class _ContactListPageState extends State<ContactListPage> {
   }
 
   refreshContacts() async {
-    PermissionStatus permissionStatus = await _getContactPermission();
-    if (permissionStatus == PermissionStatus.granted) {
+    final hasPermission = await ContactsService.requestPermissions;
+    if (hasPermission) {
       var contacts = await ContactsService.getContacts();
       setState(() {
         _contacts = contacts;
       });
     } else {
-      _handleInvalidPermissions(permissionStatus);
-    }
-  }
-
-  Future<PermissionStatus> _getContactPermission() async {
-    PermissionStatus permission = await PermissionHandler().checkPermissionStatus(PermissionGroup.contacts);
-    if (permission != PermissionStatus.granted && permission != PermissionStatus.disabled) {
-      Map<PermissionGroup, PermissionStatus> permissionStatus = await PermissionHandler().requestPermissions([PermissionGroup.contacts]);
-      return permissionStatus[PermissionGroup.contacts] ?? PermissionStatus.unknown;
-    } else {
-      return permission;
-    }
-  }
-
-  void _handleInvalidPermissions(PermissionStatus permissionStatus) {
-    if (permissionStatus == PermissionStatus.denied) {
-      throw new PlatformException(
-          code: "PERMISSION_DENIED",
-          message: "Access to location data denied",
-          details: null);
-    } else if (permissionStatus == PermissionStatus.disabled) {
-      throw new PlatformException(
-          code: "PERMISSION_DISABLED",
-          message: "Location data is not available on device",
-          details: null);
+      print('No permissions');
     }
   }
 
@@ -123,10 +98,10 @@ class ContactDetailsPage extends StatelessWidget {
       appBar: AppBar(
         title: Text(_contact.displayName ?? ""),
         actions: <Widget>[
-          IconButton(
-            icon: Icon(Icons.share),
-            onPressed: () => shareVCFCard(context, contact: _contact),
-          ),
+          // IconButton(
+          //   icon: Icon(Icons.share),
+          //   onPressed: () => shareVCFCard(context, contact: _contact),
+          // ),
           IconButton(
             icon: Icon(Icons.delete),
             onPressed: () => ContactsService.deleteContact(_contact),

@@ -3,8 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
-export 'share.dart';
-
 class ContactsService {
   static const MethodChannel _channel =
       MethodChannel('github.com/clovisnicolas/flutter_contacts');
@@ -17,6 +15,22 @@ class ContactsService {
       'withThumbnails': withThumbnails
     });
     return contacts.map((m) => Contact.fromMap(m));
+  }
+
+  static Future<bool> get hasPermissions async {
+    bool hasPermission;
+    try {
+      hasPermission = await _channel.invokeMethod('hasPermissions');
+    } catch (e) {}
+    return hasPermission ?? false;
+  }
+
+  static Future<bool> get requestPermissions async {
+    bool hasPermission;
+    try {
+      hasPermission = await _channel.invokeMethod('requestPermissions');
+    } catch (e) {}
+    return hasPermission ?? false;
   }
 
   /// Adds the [contact] to the device contact list
