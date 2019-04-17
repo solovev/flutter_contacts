@@ -4,9 +4,14 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.MethodCall;
+import io.flutter.plugin.common.PluginRegistry;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
+import android.Manifest;
 import android.annotation.TargetApi;
+import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.support.v4.app.ActivityCompat;
 import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -18,6 +23,7 @@ import android.os.Build;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,17 +37,29 @@ import static android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import static android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 
 @TargetApi(Build.VERSION_CODES.ECLAIR)
-public class ContactsServicePlugin implements MethodCallHandler {
+public class ContactsServicePlugin implements MethodCallHandler, PluginRegistry.RequestPermissionsResultListener {
+  static final int REQUEST_CONTACTS_READ_PERMISSION = 2377;
+  static final int REQUEST_CONTACTS_WRITE_PERMISSION = 2378;
 
-  ContactsServicePlugin(ContentResolver contentResolver){
-    this.contentResolver = contentResolver;
+  private static final String LOG_TAG = "ContactsService";
+
+  ContactsServicePlugin(Registrar registrar){
+    this.registrar = registrar;
+    this.contentResolver = registrar.context().getContentResolver();
   }
 
+  private final Registrar registrar;
   private final ContentResolver contentResolver;
+
+  private MethodCall mMethodCall;
+  private Result mPendingResult;
 
   public static void registerWith(Registrar registrar) {
     final MethodChannel channel = new MethodChannel(registrar.messenger(), "github.com/clovisnicolas/flutter_contacts");
-    channel.setMethodCallHandler(new ContactsServicePlugin(registrar.context().getContentResolver()));
+
+    final ContactsServicePlugin contactsServicePlugin = new ContactsServicePlugin(registrar);
+    channel.setMethodCallHandler(contactsServicePlugin);
+    registrar.addRequestPermissionsResultListener(contactsServicePlugin);
   }
 
   @Override
@@ -74,10 +92,112 @@ public class ContactsServicePlugin implements MethodCallHandler {
           result.error(null, "Failed to update the contact, make sure it has a valid identifier", null);
         }
         break;
+      case "requestPermissions": {
+        Log.d(LOG_TAG, "[contacts_service] Call requestPermissions");
+
+        if (registrar.activity() == null) {
+          result.error("no_activity", "contacts_service plugin requires a foreground activity.", null);
+          break;
+        }
+
+        final Object writeArgument = call.argument("write");
+        if (writeArgument == null) {
+          Log.d(LOG_TAG, "[contacts_service.requestPermissions] \"write\" argument is null");
+        }
+
+        final boolean write = (boolean)writeArgument;
+        final boolean hasPermissions = this.hasPermissions(write, registrar.activity());
+        if (hasPermissions) {
+          result.success(true);
+          break;
+        }
+
+        setPendingMethodCallAndResult(call, result);
+        requestPermissions(write, registrar.activity());
+        break;
+      }
+      case "hasPermissions": {
+        Log.d(LOG_TAG, "[contacts_service] Call hasPermissions");
+
+        if (registrar.activity() == null) {
+          result.error("no_activity", "contacts_service plugin requires a foreground activity.", null);
+          break;
+        }
+
+        final Object writeArgument = call.argument("write");
+        if (writeArgument == null) {
+          Log.d(LOG_TAG, "[contacts_service.hasPermissions] \"write\" argument is null");
+        }
+        final boolean hasPermissions = this.hasPermissions((boolean)writeArgument, registrar.activity());
+        result.success(hasPermissions);
+        break;
+      }
       default:
         result.notImplemented();
         break;
     }
+  }
+
+  private boolean hasPermissions(boolean write, final Activity activity) {
+    String permission = write ? Manifest.permission.WRITE_CONTACTS : Manifest.permission.READ_CONTACTS;
+    return ActivityCompat.checkSelfPermission(activity, permission)
+            == PackageManager.PERMISSION_GRANTED;
+  }
+
+  private void requestPermissions(boolean write, final Activity activity) {
+    String permission;
+    int request;
+    if (write) {
+      permission = Manifest.permission.WRITE_CONTACTS;
+      request = REQUEST_CONTACTS_WRITE_PERMISSION;
+    } else {
+      permission = Manifest.permission.READ_CONTACTS;
+      request = REQUEST_CONTACTS_READ_PERMISSION;
+    }
+    ActivityCompat.requestPermissions(activity, new String[] {permission}, request);
+  }
+
+  private boolean setPendingMethodCallAndResult(
+          MethodCall methodCall, MethodChannel.Result result) {
+    if (mPendingResult != null) {
+      return false;
+    }
+
+    mMethodCall = methodCall;
+    mPendingResult = result;
+
+    return true;
+  }
+
+  private void clearMethodCallAndResult() {
+    mMethodCall = null;
+    mPendingResult = null;
+  }
+
+  private void flushRequestPermissionsResult(boolean value) {
+    if (mPendingResult == null || mMethodCall == null || !mMethodCall.method.equals("requestPermissions")) return;
+
+    mPendingResult.success(value);
+
+    clearMethodCallAndResult();
+  }
+
+  @Override
+  public boolean onRequestPermissionsResult(
+          int requestCode, String[] permissions, int[] grantResults) {
+    boolean permissionGranted =
+            grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+
+    switch (requestCode) {
+      case REQUEST_CONTACTS_WRITE_PERMISSION:
+      case REQUEST_CONTACTS_READ_PERMISSION:
+        flushRequestPermissionsResult(permissionGranted);
+        break;
+      default:
+        return false;
+    }
+
+    return true;
   }
 
   private static final String[] PROJECTION =

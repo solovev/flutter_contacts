@@ -17,18 +17,22 @@ class ContactsService {
     return contacts.map((m) => Contact.fromMap(m));
   }
 
-  static Future<bool> get hasPermissions async {
+  static Future<bool> hasPermissions({bool write = false}) async {
     bool hasPermission;
     try {
-      hasPermission = await _channel.invokeMethod('hasPermissions');
+      hasPermission = await _channel.invokeMethod('hasPermissions', <String, dynamic> {
+      'write': write,
+    });
     } catch (e) {}
     return hasPermission ?? false;
   }
 
-  static Future<bool> get requestPermissions async {
+  static Future<bool> requestPermissions({bool write = false}) async {
     bool hasPermission;
     try {
-      hasPermission = await _channel.invokeMethod('requestPermissions');
+      hasPermission = await _channel.invokeMethod('requestPermissions', <String, dynamic> {
+      'write': write,
+    });
     } catch (e) {}
     return hasPermission ?? false;
   }

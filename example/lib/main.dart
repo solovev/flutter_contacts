@@ -33,7 +33,7 @@ class _ContactListPageState extends State<ContactListPage> {
   }
 
   refreshContacts() async {
-    final hasPermission = await ContactsService.requestPermissions;
+    final hasPermission = await ContactsService.requestPermissions();
     if (hasPermission) {
       var contacts = await ContactsService.getContacts();
       setState(() {
