@@ -39,9 +39,45 @@ public class SwiftContactsServicePlugin: NSObject, FlutterPlugin {
             else {
                 result(FlutterError(code: "", message: "Failed to update contact, make sure it has a valid identifier", details: nil))
             }
+        case "hasPermissions":
+            let dic = call.arguments as? [String: Any]
+            if let write = dic?["write"] as? Bool {
+                checkPermission(write, result: result)
+            } else {
+                result(FlutterError(code: "write flag is missing", message: nil, details: nil))
+            }
+        case "requestPermissions":
+            let dic = call.arguments as? [String: Any]
+            if let write = dic?["write"] as? Bool {
+                requestPermission(write, result: result)
+            } else {
+                result(FlutterError(code: "write flag is missing", message: nil, details: nil))
+            }
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+    
+    private func requestPermission(_ write: Bool, result: @escaping FlutterResult) {
+        requestContactPermission(result: result)
+    }
+    
+    private func requestContactPermission(result: @escaping FlutterResult) -> Void {
+        CNContactStore().requestAccess(for: CNEntityType.contacts) { (access, error) in
+            result(access)
+        }
+    }
+    
+    private func checkPermission(_ write: Bool, result: @escaping FlutterResult) {
+        result(checkContactPermission());
+    }
+    
+    private func checkContactPermission() -> Bool {
+        return getContactPermissionStatus() == .authorized
+    }
+    
+    private func getContactPermissionStatus() -> CNAuthorizationStatus {
+        return CNContactStore.authorizationStatus(for: CNEntityType.contacts)
     }
     
     func getContacts(query : String?, withThumbnails: Bool) -> [[String:Any]]{
